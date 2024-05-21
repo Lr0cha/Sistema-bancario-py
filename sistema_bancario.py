@@ -7,6 +7,29 @@ VERMELHO = "\033[31m"
 COR_PADRAO = "\033[0m" 
 VERDE = "\033[32m"
 
+class ContasIterador:
+    def __init__(self, contas):
+        self.contas = contas
+        self._index = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        try:
+            conta = self.contas[self._index]
+            return f"""\
+            Agência:\t{conta.agencia}
+            Número:\t\t{conta.numero}
+            Titular:\t{conta.cliente.nome}
+            Saldo:\t\tR$ {conta.saldo:.2f}
+        """
+        except IndexError:
+            raise StopIteration
+        finally:
+            self._index += 1
+
+
 class Cliente:
     def __init__(self, endereco):
         self.endereco = endereco
@@ -26,6 +49,17 @@ class PessoaFisica(Cliente):
         self.data_nascimento = data_nascimento
         self.cpf = cpf
 
+    def excedeu_limite_transacao(self,conta):
+        data_atual = datetime.now().strftime("%d/%m/%Y")
+        transacoes = conta.historico.transacoes
+        numero_transacoes_dia = 0
+        for transacao in transacoes:
+            data_transacao = datetime.strptime(transacao['data'], "%d/%m/%Y %H:%M")
+            if data_transacao.strftime("%d/%m/%Y") == data_atual:
+                numero_transacoes_dia += 1  
+        if numero_transacoes_dia >= 2:
+            return False
+        return True
 
 class Conta:
     def __init__(self, numero, cliente):
@@ -85,6 +119,7 @@ class Conta:
             return False
 
         return True
+    
 
 
 class ContaCorrente(Conta):
@@ -133,9 +168,15 @@ class Historico:
             {
                 "tipo": transacao.__class__.__name__,
                 "valor": transacao.valor,
-                "data": datetime.now().strftime("%d-%m-%Y %H:%M"),
+                "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
             }
         )
+    
+    def gerar_relatorio(self, tipo_transacao=None):
+        for transacao in self._transacoes:
+            if tipo_transacao is None or tipo_transacao.lower() == transacao["tipo"].lower():
+                yield transacao
+
 
 
 class Transacao(ABC):
@@ -193,6 +234,13 @@ def menu():
     => """
     return input(textwrap.dedent(menu)).upper()
 
+def log_transacao(func):
+    def envelope(*args, **kwargs):
+        resultado = func(*args, **kwargs)
+        print(f"{func.__name__.upper()}: {datetime.now().strftime("Dia %d/%m/%Y às %H:%M")}")
+        return resultado
+    return envelope
+
 
 def filtrar_cliente(cpf, clientes):
     clientes_filtrados = [cliente for cliente in clientes if cliente.cpf == cpf]
@@ -201,12 +249,12 @@ def filtrar_cliente(cpf, clientes):
 
 def recuperar_conta_cliente(cliente):
     if not cliente.contas:
-        print(f"\n{VERMELHO} Cliente não possui conta! @@@{COR_PADRAO}")
+        print(f"\n{VERMELHO} Cliente não possui conta! {COR_PADRAO}")
         return
 
     return cliente.contas[0] #acessa a primeira conta do cliente encontrada
 
-
+@log_transacao
 def depositar(clientes):
     cpf = input("Informe o CPF do cliente: ")
     cliente = filtrar_cliente(cpf, clientes)
@@ -214,17 +262,19 @@ def depositar(clientes):
     if not cliente:
         print(f"\n{VERMELHO} Cliente não encontrado! {COR_PADRAO}")
         return
-
-    valor = float(input("Informe o valor do depósito: "))
-    transacao = Deposito(valor)  # Criando uma instância de transação de depósito
-
     conta = recuperar_conta_cliente(cliente)  # Recuperando a conta associada ao cliente
     if not conta:
         return
+    valido = cliente.excedeu_limite_transacao(conta)
+    if valido:
+        valor = float(input("Informe o valor do depósito: "))
+        transacao = Deposito(valor)  # Criando uma instância de transação de depósito
+        cliente.realizar_transacao(conta, transacao)  # Realizando a transação de depósito
+        return
+    print(f"{VERMELHO}Limite diário de transações já foi atingido!{COR_PADRAO}")
+    
 
-    cliente.realizar_transacao(conta, transacao)  # Realizando a transação de depósito
-
-
+@log_transacao
 def sacar(clientes):
     cpf = input("Informe o CPF do cliente: ")
     cliente = filtrar_cliente(cpf, clientes)
@@ -233,16 +283,18 @@ def sacar(clientes):
         print(f"\n{VERMELHO} Cliente não encontrado! {VERDE}")
         return
 
-    valor = float(input("Informe o valor do saque: "))
-    transacao = Saque(valor)  # Criando uma instância de transação de saque
-
     conta = recuperar_conta_cliente(cliente)  # Recuperando a conta associada ao cliente
     if not conta:
         return
+    valido = cliente.excedeu_limite_transacao(conta)
+    if valido:
+        valor = float(input("Informe o valor do saque: "))
+        transacao = Saque(valor)  # Criando uma instância de transação de saque
+        cliente.realizar_transacao(conta, transacao)  # Realizando a transação de saque
+        return
+    print(f"{VERMELHO}Limite diário de transações já foi atingido!{COR_PADRAO}")
 
-    cliente.realizar_transacao(conta, transacao)  # Realizando a transação de saque
-
-
+@log_transacao
 def exibir_extrato(clientes):
     cpf = input("Informe o CPF do cliente: ")
     cliente = filtrar_cliente(cpf, clientes)
@@ -256,20 +308,18 @@ def exibir_extrato(clientes):
         return
 
     print("\n================ EXTRATO ================")
-    transacoes = conta.historico.transacoes
-
+    existe_transacao = False
     extrato = ""
-    if not transacoes:
-        extrato = "Não foram realizadas movimentações."
-    else:
-        for transacao in transacoes:
-            extrato += f"{VERDE}\n{transacao['tipo']}:\n\tR$ {transacao['valor']:.2f}"
-
+    for transacao in conta.historico.gerar_relatorio():
+            existe_transacao = True
+            extrato += f"{VERDE}\n{transacao['tipo']}:\tR$ {transacao['valor']:.2f}\ntransação realizada às {transacao['data']}\n"
+    if not existe_transacao:
+           extrato = "Não foram realizadas movimentações."
     print(extrato)
     print(f"\nSaldo:\n\tR$ {conta.saldo:.2f}{COR_PADRAO}")
     print("==========================================")
 
-
+@log_transacao
 def criar_cliente(clientes):
     cpf = input("Informe o CPF (somente número): ")
     cliente = filtrar_cliente(cpf, clientes)
@@ -288,7 +338,7 @@ def criar_cliente(clientes):
 
     print(f"\n{VERDE} Cliente criado com sucesso! {COR_PADRAO}")
 
-
+@log_transacao
 def criar_conta(numero_conta, clientes, contas):
     cpf = input("Informe o CPF do cliente: ")
     cliente = filtrar_cliente(cpf, clientes)
@@ -296,16 +346,15 @@ def criar_conta(numero_conta, clientes, contas):
     if not cliente:
         print(f"\n{VERMELHO} Cliente não encontrado, fluxo de criação de conta encerrado! {COR_PADRAO}")
         return
-
     conta = ContaCorrente.nova_conta(cliente=cliente, numero=numero_conta)  # Criando uma nova conta corrente associada ao cliente
     contas.append(conta)  # Adicionando a nova conta à lista de contas
     cliente.contas.append(conta)  # Associando a nova conta ao cliente
 
     print(f"\n{VERDE} Conta criada com sucesso! {COR_PADRAO}")
 
-
+@log_transacao
 def listar_contas(contas):
-    for conta in contas:
+    for conta in ContasIterador(contas):
         print("=" * 100)
         print(textwrap.dedent(str(conta)))
 
