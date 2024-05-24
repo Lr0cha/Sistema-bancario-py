@@ -1,0 +1,7 @@
+[Dia 24/05/2024 às 19:38] [Operação:CRIAR_CLIENTE] [Executada com argumentos ([<PessoaFisica: ('123')>],) e {}]
+[Dia 24/05/2024 às 19:38] [Operação:CRIAR_CONTA] [Executada com argumentos (1, [<PessoaFisica: ('123')>], [<ContaCorrente: ('0001', '1', 'Pedro Teixeira')>]) e {}]
+[Dia 24/05/2024 às 19:38] [Operação:DEPOSITAR] [Executada com argumentos ([<PessoaFisica: ('123')>],) e {}]
+[Dia 24/05/2024 às 19:38] [Operação:DEPOSITAR] [Executada com argumentos ([<PessoaFisica: ('123')>],) e {}]
+[Dia 24/05/2024 às 19:39] [Operação:SACAR] [Executada com argumentos ([<PessoaFisica: ('123')>],) e {}]
+[Dia 24/05/2024 às 19:39] [Operação:LISTAR_CONTAS] [Executada com argumentos ([<ContaCorrente: ('0001', '1', 'Pedro Teixeira')>],) e {}]
+[Dia 24/05/2024 às 19:39] [Operação:EXIBIR_EXTRATO] [Executada com argumentos ([<PessoaFisica: ('123')>],) e {}]
