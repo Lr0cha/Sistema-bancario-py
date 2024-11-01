@@ -1,9 +1,9 @@
 import textwrap
-from abc import ABC, abstractclassmethod, abstractproperty
+from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
 
-ROOT_PATH = Path(__file__).parent #pegar o caminho da pasta
+ROOT_PATH = Path(__file__).parent # pegar o caminho da pasta
 
 class ContasIterador:
     def __init__(self, contas):
@@ -11,27 +11,32 @@ class ContasIterador:
         self._index = 0
 
     def __iter__(self):
+        # Retorna o próprio iterador
         return self
 
     def __next__(self):
+        # Tenta acessar a próxima conta na lista de contas
         try:
             conta = self.contas[self._index]
-            return f"""\
-            Agência:\t{conta.agencia}
-            Número:\t\t{conta.numero}
-            Titular:\t{conta.cliente.nome}
-            Saldo:\t\tR$ {conta.saldo:.2f}
+            # Retorna uma representação formatada da conta
+            return f"""
+            Agência:{conta.agencia}
+            Número:\t{conta.numero}
+            Titular:{conta.cliente.nome}
+            Saldo:\tR$ {conta.saldo:.2f}
         """
         except IndexError:
             raise StopIteration
         finally:
+            # Incrementa o prox. item na próxima chamada de __next__
             self._index += 1
+
 
 
 class Cliente:
     def __init__(self, endereco):
         self.endereco = endereco
-        self.contas = []
+        self.contas = [] # relacionamento com contas
 
     def realizar_transacao(self, conta, transacao):
         transacao.registrar(conta)
@@ -42,14 +47,14 @@ class Cliente:
 
 class PessoaFisica(Cliente):
     def __init__(self, nome, data_nascimento, cpf, endereco):
-        super().__init__(endereco)
+        super().__init__(endereco) # construtor classe pai
         self.nome = nome
         self.data_nascimento = data_nascimento
         self.cpf = cpf
 
     def excedeu_limite_transacao(self,conta):
-        data_atual = datetime.now().strftime("%d/%m/%Y")
-        transacoes = conta.historico.transacoes
+        data_atual = datetime.now().strftime("%d/%m/%Y") # data formato br
+        transacoes = conta.historico.transacoes # pegar lista de transações associado
         numero_transacoes_dia = 0
         for transacao in transacoes:
             data_transacao = datetime.strptime(transacao['data'], "%d/%m/%Y %H:%M")
@@ -66,9 +71,9 @@ class Conta:
     def __init__(self, numero, cliente):
         self._saldo = 0
         self._numero = numero
-        self._agencia = "0001"
+        self._agencia = "0001" 
         self._cliente = cliente
-        self._historico = Historico()
+        self._historico = Historico() # instância histórico associado
 
     @classmethod
     def nova_conta(cls, cliente, numero):
@@ -185,11 +190,10 @@ class Historico:
 
 class Transacao(ABC):
     @property
-    @abstractproperty
     def valor(self):
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def registrar(self, conta):
         pass
 
@@ -239,26 +243,32 @@ def menu():
     return input(textwrap.dedent(menu)).upper()
 
 def log_transacao(func):
+    # Define a função interna que irá envolver a função original
     def envelope(*args, **kwargs):
+        # Chama a função original e armazena seu resultado
         resultado = func(*args, **kwargs)
         data_atual = datetime.now().strftime("Dia %d/%m/%Y às %H:%M")
         try:
-            with open(ROOT_PATH /"log.txt", "a", encoding="utf-8") as arquivo:
+            with open(ROOT_PATH / "log.txt", "a", encoding="utf-8") as arquivo:
+                # Registra a no arq. de log
                 arquivo.write(
                     f"[{data_atual}] [Operação:{func.__name__.upper()}] [Executada com argumentos {args} e {kwargs}]\n"
                 )
-            print(f"{func.__name__.upper()}: {datetime.now().strftime("Dia %d/%m/%Y às %H:%M")}")
+            print(f"{func.__name__.upper()}: {datetime.now().strftime('Dia %d/%m/%Y às %H:%M')}")
         except IOError as exc:
             print(f"Erro ao abrir o arquivo {exc}")
         except Exception as exc:
-            print(f"Erro ao manipular o arquivo {exc}")
+            print(f"Erro ao manipular o arquivo {exc}")      
+        # Retorna o resultado da função original
         return resultado
+    # Retorna a função interna, que agora é a versão decorada da função original
     return envelope
 
 
+
 def filtrar_cliente(cpf, clientes):
-    clientes_filtrados = [cliente for cliente in clientes if cliente.cpf == cpf]
-    return clientes_filtrados[0] if clientes_filtrados else None
+    clientes_filtrados = [cliente for cliente in clientes if cliente.cpf == cpf] # list comprehension
+    return clientes_filtrados[0] if clientes_filtrados else None # retorna cliente
 
 
 def recuperar_conta_cliente(cliente):
@@ -266,7 +276,7 @@ def recuperar_conta_cliente(cliente):
         print("\n Cliente não possui conta!")
         return
 
-    return cliente.contas[0] #acessa a primeira conta do cliente encontrada
+    return cliente.contas[0] # acessa a primeira conta do cliente encontrada
 
 @log_transacao
 def depositar(clientes):
@@ -275,7 +285,7 @@ def depositar(clientes):
 
     if not cliente:
         print("\nCliente não encontrado!")
-        return
+        return # retorna ao menu
     conta = recuperar_conta_cliente(cliente)  # Recuperando a conta associada ao cliente
     if not conta:
         return
@@ -338,7 +348,7 @@ def criar_cliente(clientes):
     cpf = input("Informe o CPF (somente número): ")
     cliente = filtrar_cliente(cpf, clientes)
 
-    if cliente:
+    if cliente: #se !none
         print("\n Já existe cliente com esse CPF!")
         return
 
@@ -366,7 +376,6 @@ def criar_conta(numero_conta, clientes, contas):
 
     print(f"\n Conta criada com sucesso!")
 
-@log_transacao
 def listar_contas(contas):
     for conta in ContasIterador(contas):
         print("=" * 100)
@@ -380,30 +389,32 @@ def main():
     while True:
         opcao = menu()
 
-        if opcao == "D":
-            depositar(clientes)  
+        match opcao: # "switch case"
+            case "D":
+                depositar(clientes)
 
-        elif opcao == "S":
-            sacar(clientes) 
+            case "S":
+                sacar(clientes)
 
-        elif opcao == "E":
-            exibir_extrato(clientes)
+            case "E":
+                exibir_extrato(clientes)
 
-        elif opcao == "NU":
-            criar_cliente(clientes)
+            case "NU":
+                criar_cliente(clientes)
 
-        elif opcao == "NC":
-            numero_conta = len(contas) + 1  # Número da conta incremental
-            criar_conta(numero_conta, clientes, contas)
+            case "NC":
+                numero_conta = len(contas) + 1  # Número da conta incremental
+                criar_conta(numero_conta, clientes, contas)
 
-        elif opcao == "LC":
-            listar_contas(contas)
+            case "LC":
+                listar_contas(contas)
 
-        elif opcao == "F":
-            break 
+            case "F":
+                break
 
-        else:
-            print("\n Operação inválida, por favor selecione novamente a operação desejada.")
+            case _:
+                print("\n@@@ Operação inválida, por favor selecione novamente a operação desejada. @@@")
+
 
 main()
 
